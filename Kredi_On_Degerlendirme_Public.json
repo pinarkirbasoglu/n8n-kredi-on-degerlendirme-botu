@@ -1,0 +1,211 @@
+{
+  "name": "Kredi_On_Degerlendirme_Public",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Kredi Başvuru Formu",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Ad Soyad"
+            },
+            {
+              "fieldLabel": "Aylık Gelir",
+              "fieldType": "number"
+            },
+            {
+              "fieldLabel": "İstenen Kredi Tutarı",
+              "fieldType": "number"
+            },
+            {
+              "fieldLabel": "Vade (Ay)",
+              "fieldType": "number"
+            },
+            {
+              "fieldLabel": "E-posta",
+              "fieldType": "email"
+            },
+            {
+              "fieldLabel": "Mevcut Aylık Borç",
+              "fieldType": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7b17fcd0-addb-46a6-8d78-a28bbd7965cb",
+      "name": "On form submission",
+      "webhookId": "1496521b-aa6a-4bf3-9a43-bef01c66154b"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Girdi Alımı\nconst veri = $input.first().json;\n\nconst adSoyad = veri['Ad Soyad'];\nconst eposta = veri['E-posta'];\nconst aylikGelir = Number(veri['Aylık Gelir']);\nconst mevcutBorc = Number(veri['Mevcut Aylık Borç']);\nconst krediTutari = Number(veri['İstenen Kredi Tutarı']);\nconst vade = Number(veri['Vade (Ay)']);\n\n// 2. Finansal Hesaplama (Basit Faiz)\nconst faizOrani = 0.035;\nconst toplamGeriOdeme = krediTutari * (1 + faizOrani * vade);\nconst yeniAylikTaksit = toplamGeriOdeme / vade;\nconst toplamAylikBorc = mevcutBorc + yeniAylikTaksit;\nconst borcGelirOrani = (toplamAylikBorc / aylikGelir) * 100;\n\n// 3. Karar Mekanizması\nlet durum = '';\nif (borcGelirOrani <= 50) {\n  durum = 'ÖN ONAY';\n} else {\n  durum = 'RED';\n}\n\nreturn [\n  {\n    json: {\n      Ad_Soyad: adSoyad,\n      Eposta: eposta,\n      Aylik_Gelir: aylikGelir,\n      Mevcut_Borc: mevcutBorc,\n      Kredi_Tutari: krediTutari,\n      Vade: vade,\n      Toplam_Geri_Odeme: Math.round(toplamGeriOdeme),\n      Yeni_Aylik_Taksit: Math.round(yeniAylikTaksit),\n      Toplam_Aylik_Borc: Math.round(toplamAylikBorc),\n      Borc_Gelir_Orani: Number(borcGelirOrani.toFixed(2)),\n      Durum: durum\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "96cdc44a-bdee-426b-851a-e05314680af7",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "BURAYA_GOOGLE_SHEET_ID_GIRIN",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sayfa1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Ad_Soyad": "={{ $('Code in JavaScript').item.json.Ad_Soyad }}",
+            "Aylik_Gelir": "={{ $('Code in JavaScript').item.json.Aylik_Gelir }}",
+            "Kredi_Tutari": "={{ $('Code in JavaScript').item.json.Kredi_Tutari }}",
+            "Borc_Gelir_Orani": "={{ $('Code in JavaScript').item.json.Borc_Gelir_Orani }}",
+            "Durum": "={{ $('Code in JavaScript').item.json.Durum }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        528,
+        0
+      ],
+      "id": "67df0230-998a-4c43-9a57-37766d039374",
+      "name": "Append row in sheet"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Sen kurumsal, güven veren ve nazik bir banka kredi uzmanısın. Aşağıdaki başvuru değerlendirme sonucuna göre müşteriye gönderilecek e-posta gövde metnini yaz:\n\nMüşteri Adı Soyadı: {{ $('Code in JavaScript').item.json.Ad_Soyad }}\nİstenen Kredi Tutarı: {{ $('Code in JavaScript').item.json.Kredi_Tutari }} TL\nVade: {{ $('Code in JavaScript').item.json.Vade }} Ay\nHesaplanan Aylık Taksit: {{ $('Code in JavaScript').item.json.Yeni_Aylik_Taksit }} TL\nToplam Geri Ödeme: {{ $('Code in JavaScript').item.json.Toplam_Geri_Odeme }} TL\nBorç / Gelir Oranı: %{{ $('Code in JavaScript').item.json.Borc_Gelir_Orani }}\nDeğerlendirme Sonucu: {{ $('Code in JavaScript').item.json.Durum }}\n\nKurallar:\n1. Eğer Değerlendirme Sonucu \"ÖN ONAY\" ise müşteriyi adıyla selamla, tebrik et ve aylık taksit ile toplam geri ödeme bilgilerini net şekilde paylaş.\n2. Eğer Değerlendirme Sonucu \"RED\" ise müşteriyi adıyla selamla, bankacılık risk kuralları gereği toplam aylık borç/gelir oranının %50 sınırını aştığı (%{{ $('Code in JavaScript').item.json.Borc_Gelir_Orani }}) için başvurunun şu aşamada onaylanamadığını nazikçe açıkla ve daha uzun vade veya daha düşük tutar deneyebileceğini belirt.\n3. E-postaya konu başlığı (Subject) ekleme, sadece doğrudan gönderime hazır e-posta gövde metnini yaz.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        736,
+        0
+      ],
+      "id": "a10fd611-715e-4e1a-8038-44ca63f28989",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        656,
+        208
+      ],
+      "id": "a722ce20-32d2-4637-ac38-659e99ea7d06",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {
+        "fromEmail": "GONDEREN_EPOSTA_ADRESINIZ@gmail.com",
+        "toEmail": "={{ $('On form submission').item.json['E-posta'] }}",
+        "subject": "Kredi Başvurunuz Hakkında Ön Değerlendirme Sonucu",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1088,
+        0
+      ],
+      "id": "6359f398-cae3-4bf4-8b36-9b25864044a8",
+      "name": "Send an Email",
+      "webhookId": "d42b517c-2721-4dd8-b32c-fe2594a8f909"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "tags": []
+}
